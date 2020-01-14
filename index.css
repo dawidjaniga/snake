@@ -1,0 +1,93 @@
+body {
+  background: black;
+  color: white;
+  font-family: 'Press Start 2P', cursive;
+}
+
+.area {
+  border: 1px solid limegreen;
+}
+
+.game {
+  width: 100%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hud {
+  width: 100%;
+}
+
+.button {
+  background: #385838;
+  color: white;
+  padding: 1em;
+  cursor: pointer;
+  text-align: center;
+  width: auto;
+}
+
+@keyframes textShadowColor {
+  0% {
+    text-shadow: 2px 2px 0 blue;
+  }
+
+  25% {
+    text-shadow: 2px 2px 0 red;
+  }
+
+  50% {
+    text-shadow: 2px 2px 0 orange;
+  }
+
+  75% {
+    text-shadow: 2px 2px 0 cyan;
+  }
+
+  100% {
+    text-shadow: 2px 2px 0 blueviolet;
+  }
+}
+
+.title {
+  animation: textShadowColor 2s infinite;
+  display: flex;
+  align-items: center;
+}
+
+.title__text {
+}
+
+.title__logo {
+  margin-left: 0.5em;
+}
+
+.scores {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 2em 0;
+}
+
+.gameover {
+  background: #dab835f5;
+  padding: 2em;
+  text-shadow: 2px 1px 0px #000;
+  text-align: center;
+  border: 30px inset #bbb16740;
+  position: fixed;
+  top: 5vh;
+  color: white;
+}
+
+.congrats {
+  animation: textShadowColor 0.3s infinite;
+}
+
+@media only screen and (min-width: 640px) {
+  .game {
+    width: 640px;
+  }
+}

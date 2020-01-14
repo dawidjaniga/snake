@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Snake</title>
+    <link href="https://fonts.googleapis.com/css?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/snake.9ad09f98.css">
+  <script src="/snake.9ad09f98.js"></script></head>
+
+  <body>
+    <div class="game">
+      <h1 class="title">
+        <div class="title__text">Snake</div>
+        <div class="title__logo">🐍</div>
+      </h1>
+      <div class="hud">
+        <div class="button" id="js-start">Start</div>
+        <div class="scores">
+          <div class="">Score <span id="js-score"></span></div>
+          <div class="">Highscore <span id="js-highscore"></span></div>
+        </div>
+      </div>
+
+      <div class="gameover" id="js-gameover" hidden="">
+        <h2>Game Over</h2>
+        <h3>Your score <span id="js-your-score"></span></h3>
+        <h3 class="congrats" id="js-new-highscore" hidden="">
+          You've beaten the new highscore 🎉
+        </h3>
+        <div class="button" id="js-restart">Play again</div>
+      </div>
+      <canvas class="area" id="js-area"></canvas>
+    </div>
+    <script src="/snake.e31bb0bc.js"></script>
+  </body>
+</html>

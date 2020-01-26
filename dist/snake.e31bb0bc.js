@@ -3868,6 +3868,9 @@ function createSnakeGame() {
   var area = createArea({
     state: state
   });
+  var collisionDetector = createCollisionDetector({
+    state: state
+  });
   var areaElement = createElement('area');
   var startElement = createElement('start');
   var restartElement = createElement('restart');
@@ -3967,9 +3970,9 @@ function createSnakeGame() {
 
   function clock() {
     state.setSnake(snake.getNewPosition(state.getSnake()));
-    var appleOnSnakeHead = headIsOnApple();
+    var appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple();
 
-    if (headTouchingBoundaries() || snakeEatHimself()) {
+    if (collisionDetector.headTouchingBoundaries() || collisionDetector.snakeEatHimself()) {
       endGame();
     }
 
@@ -3977,32 +3980,6 @@ function createSnakeGame() {
       eatApple(appleOnSnakeHead);
       addRandomApple();
     }
-  }
-
-  function headIsOnApple() {
-    var head = state.getSnakeHead();
-    var foundApple;
-    state.getApples().some(function (apple) {
-      if (apple.x === head.x && apple.y === head.y) {
-        foundApple = apple;
-        return true;
-      }
-    });
-    return foundApple;
-  }
-
-  function headTouchingBoundaries() {
-    var head = state.getSnakeHead();
-    return head.x < 0 || head.x >= areaSquareWidth || head.y < 0 || head.y >= areaSquareWidth;
-  }
-
-  function snakeEatHimself() {
-    var head = state.getSnakeHead();
-    var result = false;
-    state.getSnake().slice(1).some(function (part) {
-      return result = part.x === head.x && part.y === head.y;
-    });
-    return result;
   }
 
   function startGameInterval() {
@@ -4020,7 +3997,7 @@ function createSnakeGame() {
   }
 
   function calculateSpeedBasedOnScore(score) {
-    var minSpeed = 250;
+    var minSpeed = 150;
     var maxSpeed = 80;
     var step = 25;
     var speed = minSpeed - score * 25;
@@ -4033,8 +4010,44 @@ function createSnakeGame() {
   return {};
 }
 
-function createArea(_ref) {
+function createCollisionDetector(_ref) {
   var state = _ref.state;
+
+  function snakeEatHimself() {
+    var head = state.getSnakeHead();
+    var result = false;
+    state.getSnake().slice(1).some(function (part) {
+      return result = part.x === head.x && part.y === head.y;
+    });
+    return result;
+  }
+
+  function headTouchingBoundaries() {
+    var head = state.getSnakeHead();
+    return head.x < 0 || head.x >= areaSquareWidth || head.y < 0 || head.y >= areaSquareWidth;
+  }
+
+  function snakeHeadTouchingAnyApple() {
+    var head = state.getSnakeHead();
+    var foundApple;
+    state.getApples().some(function (apple) {
+      if (apple.x === head.x && apple.y === head.y) {
+        foundApple = apple;
+        return true;
+      }
+    });
+    return foundApple;
+  }
+
+  return {
+    snakeEatHimself: snakeEatHimself,
+    headTouchingBoundaries: headTouchingBoundaries,
+    snakeHeadTouchingAnyApple: snakeHeadTouchingAnyApple
+  };
+}
+
+function createArea(_ref2) {
+  var state = _ref2.state;
   debug('Creating Area');
   var canvasElement = createElement('area');
   var canvas = canvasElement.getElement();
@@ -4094,8 +4107,8 @@ function getRandomInt(start, end) {
   return random;
 }
 
-function createSnake(_ref2) {
-  var startDirection = _ref2.startDirection;
+function createSnake(_ref3) {
+  var startDirection = _ref3.startDirection;
   var oppositeDirections = {
     left: 'right',
     up: 'down',

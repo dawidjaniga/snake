@@ -55,8 +55,9 @@ function createSnakeGame () {
   debug('Creating Snake Game')
 
   const state = createState()
-
   const area = createArea({ state })
+  const collisionDetector = createCollisionDetector({ state })
+
   const areaElement = createElement('area')
   const startElement = createElement('start')
   const restartElement = createElement('restart')
@@ -154,9 +155,12 @@ function createSnakeGame () {
 
   function clock () {
     state.setSnake(snake.getNewPosition(state.getSnake()))
-    const appleOnSnakeHead = headIsOnApple()
+    const appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple()
 
-    if (headTouchingBoundaries() || snakeEatHimself()) {
+    if (
+      collisionDetector.headTouchingBoundaries() ||
+      collisionDetector.snakeEatHimself()
+    ) {
       endGame()
     }
 
@@ -164,42 +168,6 @@ function createSnakeGame () {
       eatApple(appleOnSnakeHead)
       addRandomApple()
     }
-  }
-
-  function headIsOnApple () {
-    const head = state.getSnakeHead()
-    let foundApple
-
-    state.getApples().some(apple => {
-      if (apple.x === head.x && apple.y === head.y) {
-        foundApple = apple
-        return true
-      }
-    })
-
-    return foundApple
-  }
-
-  function headTouchingBoundaries () {
-    const head = state.getSnakeHead()
-
-    return (
-      head.x < 0 ||
-      head.x >= areaSquareWidth ||
-      head.y < 0 ||
-      head.y >= areaSquareWidth
-    )
-  }
-
-  function snakeEatHimself () {
-    const head = state.getSnakeHead()
-    let result = false
-
-    state
-      .getSnake()
-      .slice(1)
-      .some(part => (result = part.x === head.x && part.y === head.y))
-    return result
   }
 
   function startGameInterval () {
@@ -220,7 +188,7 @@ function createSnakeGame () {
   }
 
   function calculateSpeedBasedOnScore (score) {
-    const minSpeed = 250
+    const minSpeed = 150
     const maxSpeed = 80
     const step = 25
     const speed = minSpeed - score * 25
@@ -231,6 +199,50 @@ function createSnakeGame () {
   }
 
   return {}
+}
+
+function createCollisionDetector ({ state }) {
+  function snakeEatHimself () {
+    const head = state.getSnakeHead()
+    let result = false
+
+    state
+      .getSnake()
+      .slice(1)
+      .some(part => (result = part.x === head.x && part.y === head.y))
+    return result
+  }
+
+  function headTouchingBoundaries () {
+    const head = state.getSnakeHead()
+
+    return (
+      head.x < 0 ||
+      head.x >= areaSquareWidth ||
+      head.y < 0 ||
+      head.y >= areaSquareWidth
+    )
+  }
+
+  function snakeHeadTouchingAnyApple () {
+    const head = state.getSnakeHead()
+    let foundApple
+
+    state.getApples().some(apple => {
+      if (apple.x === head.x && apple.y === head.y) {
+        foundApple = apple
+        return true
+      }
+    })
+
+    return foundApple
+  }
+
+  return {
+    snakeEatHimself,
+    headTouchingBoundaries,
+    snakeHeadTouchingAnyApple
+  }
 }
 
 function createArea ({ state }) {

@@ -3868,17 +3868,10 @@ function createSnakeGame() {
   var area = createArea({
     state: state
   });
+  var userInterface = createUserInterface();
   var collisionDetector = createCollisionDetector({
     state: state
   });
-  var areaElement = createElement('area');
-  var startElement = createElement('start');
-  var restartElement = createElement('restart');
-  var scoreElement = createElement('score');
-  var yourScoreElement = createElement('your-score');
-  var highscoreElement = createElement('highscore');
-  var newHighscoreElement = createElement('new-highscore');
-  var gameoverElement = createElement('gameover');
   var keyboard = createKeyboardController();
   var snake = createSnake({
     startDirection: 'right'
@@ -3890,15 +3883,15 @@ function createSnakeGame() {
       return snake.changeDirection(direction);
     });
   });
-  startElement.on('click', function () {
-    startElement.hide();
-    areaElement.show();
+  userInterface.onStartClick(function () {
+    userInterface.hideStart();
+    userInterface.showPlayingField();
     setTimeout(startGame, 500);
     randomAppleTimeout = startAddRandomAppleTimeout();
   });
-  restartElement.on('click', function () {
+  userInterface.onRestartClick(function () {
     prepareGame();
-    areaElement.show();
+    userInterface.showPlayingField();
     setTimeout(startGame, 500);
   });
 
@@ -3913,11 +3906,11 @@ function createSnakeGame() {
 
   function prepareGame() {
     state.resetState();
-    scoreElement.setValue(state.getScore());
-    highscoreElement.setValue(state.getHighscore());
-    gameoverElement.hide();
-    newHighscoreElement.hide();
-    areaElement.hide();
+    userInterface.setScore(state.getScore());
+    userInterface.setHighscore(state.getHighscore());
+    userInterface.hideGameover();
+    userInterface.hideCongratulations();
+    userInterface.hidePlayingField();
   }
 
   function startGame() {
@@ -3930,35 +3923,30 @@ function createSnakeGame() {
   function endGame() {
     stopGame();
     setGameResults();
-    gameoverElement.show();
+    userInterface.showGameover();
     snake.resetDirection();
     clearTimeout(startAddRandomAppleTimeout);
   }
 
   function setGameResults() {
-    var highscore = state.getHighscore();
     var score = state.getScore();
-    yourScoreElement.setValue(score);
+    var highscore = state.getHighscore();
+    userInterface.setYourScore(score);
 
     if (score > highscore) {
-      localStorage.setItem('highscore', score);
-      newHighscoreElement.show();
+      state.setHighscore(score);
+      userInterface.showCongratulations();
     }
   }
 
   function eatApple(eatenApple) {
-    state.addSnakePart();
     state.removeApple(eatenApple);
-    addPoint();
-    scoreElement.setValue(state.getScore());
-    stopGameInterval();
-    startGameInterval();
-  }
-
-  function addPoint() {
+    state.addSnakePart();
     state.addScorePoint();
     debug('➕ Point added. New score: ', state.getScore());
-    scoreElement.innerText = state.getScore();
+    userInterface.setScore(state.getScore());
+    stopGameInterval();
+    startGameInterval();
   }
 
   function addRandomApple() {
@@ -3997,7 +3985,7 @@ function createSnakeGame() {
   }
 
   function calculateSpeedBasedOnScore(score) {
-    var minSpeed = 150;
+    var minSpeed = 50;
     var maxSpeed = 80;
     var step = 25;
     var speed = minSpeed - score * 25;
@@ -4008,6 +3996,58 @@ function createSnakeGame() {
   }
 
   return {};
+}
+
+function createUserInterface() {
+  var playingFieldElement = createElement('playing-field');
+  var startElement = createElement('start');
+  var restartElement = createElement('restart');
+  var scoreElement = createElement('score');
+  var highscoreElement = createElement('highscore');
+  var yourScoreElement = createElement('your-score');
+  var congratulationsElement = createElement('congratulations');
+  var gameoverElement = createElement('gameover');
+  return {
+    showPlayingField: function showPlayingField() {
+      return playingFieldElement.show();
+    },
+    hidePlayingField: function hidePlayingField() {
+      return playingFieldElement.hide();
+    },
+    showStart: function showStart() {
+      return startElement.show();
+    },
+    hideStart: function hideStart() {
+      return startElement.hide();
+    },
+    showCongratulations: function showCongratulations() {
+      return congratulationsElement.show();
+    },
+    hideCongratulations: function hideCongratulations() {
+      return congratulationsElement.hide();
+    },
+    showGameover: function showGameover() {
+      return gameoverElement.show();
+    },
+    hideGameover: function hideGameover() {
+      return gameoverElement.hide();
+    },
+    setScore: function setScore(value) {
+      return scoreElement.setValue(value);
+    },
+    setHighscore: function setHighscore(value) {
+      return highscoreElement.setValue(value);
+    },
+    setYourScore: function setYourScore(value) {
+      return yourScoreElement.setValue(value);
+    },
+    onStartClick: function onStartClick(handler) {
+      return startElement.on('click', handler);
+    },
+    onRestartClick: function onRestartClick(handler) {
+      return restartElement.on('click', handler);
+    }
+  };
 }
 
 function createCollisionDetector(_ref) {
@@ -4049,7 +4089,7 @@ function createCollisionDetector(_ref) {
 function createArea(_ref2) {
   var state = _ref2.state;
   debug('Creating Area');
-  var canvasElement = createElement('area');
+  var canvasElement = createElement('playing-field');
   var canvas = canvasElement.getElement();
   var ctx = canvas.getContext('2d');
   var arenaWidth = areaSquareWidth * squareWidth;

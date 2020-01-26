@@ -56,17 +56,11 @@ function createSnakeGame () {
 
   const state = createState()
   const area = createArea({ state })
+  const userInterface = createUserInterface()
   const collisionDetector = createCollisionDetector({ state })
 
-  const areaElement = createElement('area')
-  const startElement = createElement('start')
-  const restartElement = createElement('restart')
-  const scoreElement = createElement('score')
-  const yourScoreElement = createElement('your-score')
-  const highscoreElement = createElement('highscore')
-  const newHighscoreElement = createElement('new-highscore')
-  const gameoverElement = createElement('gameover')
   const keyboard = createKeyboardController()
+
   const snake = createSnake({ startDirection: 'right' })
   let gameInterval
   let randomAppleTimeout
@@ -74,16 +68,16 @@ function createSnakeGame () {
     keyboard.onClick(direction, () => snake.changeDirection(direction))
   )
 
-  startElement.on('click', () => {
-    startElement.hide()
-    areaElement.show()
+  userInterface.onStartClick(() => {
+    userInterface.hideStart()
+    userInterface.showPlayingField()
     setTimeout(startGame, 500)
     randomAppleTimeout = startAddRandomAppleTimeout()
   })
 
-  restartElement.on('click', () => {
+  userInterface.onRestartClick(() => {
     prepareGame()
-    areaElement.show()
+    userInterface.showPlayingField()
     setTimeout(startGame, 500)
   })
 
@@ -98,11 +92,11 @@ function createSnakeGame () {
 
   function prepareGame () {
     state.resetState()
-    scoreElement.setValue(state.getScore())
-    highscoreElement.setValue(state.getHighscore())
-    gameoverElement.hide()
-    newHighscoreElement.hide()
-    areaElement.hide()
+    userInterface.setScore(state.getScore())
+    userInterface.setHighscore(state.getHighscore())
+    userInterface.hideGameover()
+    userInterface.hideCongratulations()
+    userInterface.hidePlayingField()
   }
 
   function startGame () {
@@ -115,35 +109,31 @@ function createSnakeGame () {
   function endGame () {
     stopGame()
     setGameResults()
-    gameoverElement.show()
+    userInterface.showGameover()
     snake.resetDirection()
     clearTimeout(startAddRandomAppleTimeout)
   }
 
   function setGameResults () {
-    const highscore = state.getHighscore()
     const score = state.getScore()
-    yourScoreElement.setValue(score)
+    const highscore = state.getHighscore()
+    userInterface.setYourScore(score)
 
     if (score > highscore) {
-      localStorage.setItem('highscore', score)
-      newHighscoreElement.show()
+      state.setHighscore(score)
+      userInterface.showCongratulations()
     }
   }
 
   function eatApple (eatenApple) {
-    state.addSnakePart()
     state.removeApple(eatenApple)
-    addPoint()
-    scoreElement.setValue(state.getScore())
-    stopGameInterval()
-    startGameInterval()
-  }
-
-  function addPoint () {
+    state.addSnakePart()
     state.addScorePoint()
     debug('➕ Point added. New score: ', state.getScore())
-    scoreElement.innerText = state.getScore()
+
+    userInterface.setScore(state.getScore())
+    stopGameInterval()
+    startGameInterval()
   }
 
   function addRandomApple () {
@@ -188,7 +178,7 @@ function createSnakeGame () {
   }
 
   function calculateSpeedBasedOnScore (score) {
-    const minSpeed = 150
+    const minSpeed = 50
     const maxSpeed = 80
     const step = 25
     const speed = minSpeed - score * 25
@@ -199,6 +189,33 @@ function createSnakeGame () {
   }
 
   return {}
+}
+
+function createUserInterface () {
+  const playingFieldElement = createElement('playing-field')
+  const startElement = createElement('start')
+  const restartElement = createElement('restart')
+  const scoreElement = createElement('score')
+  const highscoreElement = createElement('highscore')
+  const yourScoreElement = createElement('your-score')
+  const congratulationsElement = createElement('congratulations')
+  const gameoverElement = createElement('gameover')
+
+  return {
+    showPlayingField: () => playingFieldElement.show(),
+    hidePlayingField: () => playingFieldElement.hide(),
+    showStart: () => startElement.show(),
+    hideStart: () => startElement.hide(),
+    showCongratulations: () => congratulationsElement.show(),
+    hideCongratulations: () => congratulationsElement.hide(),
+    showGameover: () => gameoverElement.show(),
+    hideGameover: () => gameoverElement.hide(),
+    setScore: value => scoreElement.setValue(value),
+    setHighscore: value => highscoreElement.setValue(value),
+    setYourScore: value => yourScoreElement.setValue(value),
+    onStartClick: handler => startElement.on('click', handler),
+    onRestartClick: handler => restartElement.on('click', handler)
+  }
 }
 
 function createCollisionDetector ({ state }) {
@@ -247,7 +264,7 @@ function createCollisionDetector ({ state }) {
 
 function createArea ({ state }) {
   debug('Creating Area')
-  const canvasElement = createElement('area')
+  const canvasElement = createElement('playing-field')
   const canvas = canvasElement.getElement()
   const ctx = canvas.getContext('2d')
   const arenaWidth = areaSquareWidth * squareWidth

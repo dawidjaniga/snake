@@ -5,37 +5,58 @@ localStorage.debug = '*'
 
 const squareWidth = 14
 const areaSquareWidth = Math.floor(window.innerHeight / 20)
-const initialSnakeBody = [
-  {
-    x: 3,
-    y: 7
-  },
-  {
-    x: 2,
-    y: 7
-  },
-  {
-    x: 1,
-    y: 7
-  },
-  {
-    x: 0,
-    y: 7
+
+function createState () {
+  const defaultState = {
+    score: 0,
+    snake: [
+      {
+        x: 3,
+        y: 7
+      },
+      {
+        x: 2,
+        y: 7
+      },
+      {
+        x: 1,
+        y: 7
+      },
+      {
+        x: 0,
+        y: 7
+      }
+    ],
+    apples: []
   }
-]
-const store = {
-  score: 0,
-  snake: {
-    body: initialSnakeBody
-  },
-  apples: []
+  let state = cloneDeep(defaultState)
+
+  return {
+    addScorePoint: () => state.score++,
+    getScore: () => state.score,
+    getHighscore: () => localStorage.getItem('highscore'),
+    setHighscore: value => localStorage.setItem('highscore', value),
+    resetState: () => (state = cloneDeep(defaultState)),
+    getSnake: () => state.snake,
+    setSnake: snake => (state.snake = snake),
+    getSnakeHead: () => state.snake[0],
+    addSnakePart: () => state.snake.push(state.snake[0]),
+    addApple: apple => state.apples.push(apple),
+    getApples: () => state.apples,
+    removeApple: removingApple =>
+      (state.apples = state.apples.filter(
+        apple => apple.x !== removingApple.x && apple.y !== removingApple.y
+      ))
+  }
 }
 
 function createSnakeGame () {
   showIntroInConsole()
   debug('Creating Snake Game')
 
-  const area = createArea()
+  const state = createState()
+
+  const area = createArea({ state })
   const areaElement = createElement('area')
   const startElement = createElement('start')
   const restartElement = createElement('restart')
@@ -75,17 +96,16 @@ function createSnakeGame () {
   prepareGame()
 
   function prepareGame () {
-    store.score = 0
-    store.snake.body = initialSnakeBody
-    store.apples = []
-    scoreElement.setValue(store.score)
-    highscoreElement.setValue(localStorage.getItem('highscore'))
+    state.resetState()
+    scoreElement.setValue(state.getScore())
+    highscoreElement.setValue(state.getHighscore())
     gameoverElement.hide()
     newHighscoreElement.hide()
     areaElement.hide()
   }
 
   function startGame () {
+    debug('Starting game')
     addRandomApple()
     startGameInterval()
     area.startRendering()
@@ -95,12 +115,13 @@ function createSnakeGame () {
     stopGame()
     setGameResults()
     gameoverElement.show()
+    snake.resetDirection()
     clearTimeout(startAddRandomAppleTimeout)
   }
 
   function setGameResults () {
-    const highscore = localStorage.getItem('highscore')
-    const { score } = store
+    const highscore = state.getHighscore()
+    const score = state.getScore()
     yourScoreElement.setValue(score)
 
     if (score > highscore) {
@@ -110,30 +131,29 @@ function createSnakeGame () {
   }
 
   function eatApple (eatenApple) {
-    store.snake.body.push(store.snake.body[0])
-    store.apples = store.apples.filter(
-      apple => apple.x !== eatenApple.x && apple.y !== eatenApple.y
-    )
+    state.addSnakePart()
+    state.removeApple(eatenApple)
     addPoint()
-    scoreElement.setValue(store.score)
+    scoreElement.setValue(state.getScore())
     stopGameInterval()
     startGameInterval()
   }
 
   function addPoint () {
-    store.score += 1
-    scoreElement.innerText = store.score
+    state.addScorePoint()
+    debug('➕ Point added. New score: ', state.getScore())
+    scoreElement.innerText = state.getScore()
   }
 
   function addRandomApple () {
-    store.apples.push({
+    state.addApple({
       x: getRandomInt(0, areaSquareWidth - 1),
       y: getRandomInt(0, areaSquareWidth - 1)
     })
   }
 
   function clock () {
-    store.snake.body = snake.getNewPosition(store.snake.body)
+    state.setSnake(snake.getNewPosition(state.getSnake()))
     const appleOnSnakeHead = headIsOnApple()
 
     if (headTouchingBoundaries() || snakeEatHimself()) {
@@ -147,10 +167,10 @@ function createSnakeGame () {
   }
 
   function headIsOnApple () {
-    const head = store.snake.body[0]
+    const head = state.getSnakeHead()
     let foundApple
 
-    store.apples.some(apple => {
+    state.getApples().some(apple => {
       if (apple.x === head.x && apple.y === head.y) {
         foundApple = apple
         return true
@@ -161,7 +181,7 @@ function createSnakeGame () {
   }
 
   function headTouchingBoundaries () {
-    const head = store.snake.body[0]
+    const head = state.getSnakeHead()
 
     return (
       head.x < 0 ||
@@ -172,17 +192,21 @@ function createSnakeGame () {
   }
 
   function snakeEatHimself () {
-    const head = store.snake.body[0]
+    const head = state.getSnakeHead()
     let result = false
 
-    store.snake.body
+    state
+      .getSnake()
       .slice(1)
       .some(part => (result = part.x === head.x && part.y === head.y))
     return result
   }
 
   function startGameInterval () {
-    gameInterval = setInterval(clock, calculateSpeedBasedOnScore(store.score))
+    gameInterval = setInterval(
+      clock,
+      calculateSpeedBasedOnScore(state.getScore())
+    )
   }
 
   function stopGameInterval () {
@@ -190,6 +214,7 @@ function createSnakeGame () {
   }
 
   function stopGame () {
+    debug('🏁 Game over. Your result', state.getScore())
     stopGameInterval()
     area.stopRendering()
   }
@@ -200,14 +225,15 @@ function createSnakeGame () {
     const step = 25
     const speed = minSpeed - score * 25
     const newSpeed = speed < maxSpeed ? maxSpeed : speed
-    debug('new speed', newSpeed)
+    console.groupEnd('Snake with speed ', speed)
+    console.group('Snake with speed ', newSpeed)
     return newSpeed
   }
 
   return {}
 }
 
-function createArea () {
+function createArea ({ state }) {
   debug('Creating Area')
   const canvasElement = createElement('area')
   const canvas = canvasElement.getElement()
@@ -249,8 +275,8 @@ function createArea () {
 
   function draw (timestamp) {
     clearCanvas()
-    drawSnake(store.snake.body)
-    drawApples(store.apples)
+    drawSnake(state.getSnake())
+    drawApples(state.getApples())
     frameRequestId = window.requestAnimationFrame(draw)
   }
 
@@ -269,20 +295,11 @@ function createArea () {
   }
 }
 
-////////
-
 const game = createSnakeGame()
 
 function getRandomInt (start, end) {
   const random = Math.round(Math.random() * end + start)
   return random
-}
-
-function createPoint (x, y) {
-  return {
-    x,
-    y
-  }
 }
 
 function createSnake ({ startDirection }) {
@@ -325,9 +342,14 @@ function createSnake ({ startDirection }) {
     }
   }
 
+  function resetDirection () {
+    direction = startDirection
+  }
+
   return {
     getNewPosition,
-    changeDirection
+    changeDirection,
+    resetDirection
   }
 }
 

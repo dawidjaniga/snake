@@ -6,7 +6,34 @@ localStorage.debug = '*'
 const squareWidth = 14
 const areaSquareWidth = Math.floor(window.innerHeight / 20)
 
+createSnakeGame()
+
+function createSnakeGame () {
+  showIntroInConsole()
+  debug('🚀 Creating Snake Game')
+
+  const state = createState()
+  const snake = createSnake({ startDirection: 'right' })
+  const gameLoop = createGameLoop({ state, snake })
+  const userInterface = createUserInterface()
+  const gameBehaviors = createGameBehaviors({
+    state,
+    snake,
+    gameLoop,
+    userInterface
+  })
+  const gameInteractions = createGameInteractions({
+    snake,
+    gameLoop,
+    userInterface,
+    gameBehaviors
+  })
+
+  gameBehaviors.prepareGame()
+}
+
 function createState () {
+  const stateDebug = debug.extend('state')
   const defaultState = {
     score: 0,
     snake: [
@@ -27,9 +54,14 @@ function createState () {
         y: 7
       }
     ],
-    apples: []
+    apples: [],
+    speed: 220,
+    gameInterval: 0
   }
   let state = cloneDeep(defaultState)
+
+  stateDebug(`State initialized 🗂`)
+  console.log(state)
 
   return {
     addScorePoint: () => state.score++,
@@ -46,104 +78,123 @@ function createState () {
     removeApple: removingApple =>
       (state.apples = state.apples.filter(
         apple => apple.x !== removingApple.x && apple.y !== removingApple.y
-      ))
+      )),
+    getSpeed: () => state.speed,
+    setSpeed: value => (state.speed = value),
+    getGameInterval: () => state.gameInterval,
+    setGameInterval: value => (state.gameInterval = value)
   }
 }
 
-function createSnakeGame () {
-  showIntroInConsole()
-  debug('Creating Snake Game')
+function createSnake ({ startDirection }) {
+  const snakeDebug = debug.extend('🐍')
+  const oppositeDirections = {
+    left: 'right',
+    up: 'down',
+    right: 'left',
+    down: 'up'
+  }
+  let direction = startDirection
 
-  const state = createState()
-  const area = createArea({ state })
-  const userInterface = createUserInterface()
-  const collisionDetector = createCollisionDetector({ state })
+  function getNewPosition (currentSnake) {
+    const newSnake = cloneDeep(currentSnake)
 
+    if (direction === 'up') {
+      newSnake[0].y -= 1
+    }
+
+    if (direction === 'right') {
+      newSnake[0].x += 1
+    }
+
+    if (direction === 'down') {
+      newSnake[0].y += 1
+    }
+
+    if (direction === 'left') {
+      newSnake[0].x -= 1
+    }
+
+    for (let i = 1; i < currentSnake.length; i++) {
+      newSnake[i] = currentSnake[i - 1]
+    }
+    return newSnake
+  }
+
+  function changeDirection (newDirection) {
+    if (oppositeDirections[direction] !== newDirection) {
+      direction = newDirection
+      snakeDebug(`New direction ${direction}`)
+    }
+  }
+
+  function resetDirection () {
+    direction = startDirection
+  }
+
+  return {
+    getNewPosition,
+    changeDirection,
+    resetDirection
+  }
+}
+
+function createGameInteractions ({
+  userInterface,
+  snake,
+  gameBehaviors,
+  gameLoop
+}) {
   const keyboard = createKeyboardController()
+  const snakeMoveDirections = ['left', 'right', 'up', 'down']
 
-  const snake = createSnake({ startDirection: 'right' })
-  let gameInterval
-  let randomAppleTimeout
-  ;['left', 'right', 'up', 'down'].forEach(direction =>
+  snakeMoveDirections.forEach(direction =>
     keyboard.onClick(direction, () => snake.changeDirection(direction))
   )
 
   userInterface.onStartClick(() => {
     userInterface.hideStart()
     userInterface.showPlayingField()
-    setTimeout(startGame, 500)
-    randomAppleTimeout = startAddRandomAppleTimeout()
+    setTimeout(gameBehaviors.startGame, 500)
   })
 
   userInterface.onRestartClick(() => {
-    prepareGame()
+    gameBehaviors.prepareGame()
     userInterface.showPlayingField()
-    setTimeout(startGame, 500)
+    setTimeout(gameBehaviors.startGame, 500)
   })
 
-  function startAddRandomAppleTimeout () {
-    setTimeout(() => {
-      addRandomApple()
-      randomAppleTimeout = startAddRandomAppleTimeout()
-    }, getRandomInt(16000, 40000))
+  gameLoop.onSnakeCollision(() => {
+    gameBehaviors.stopGame()
+  })
+
+  gameLoop.onSnakeEatApple(apple => {
+    gameBehaviors.eatApple(apple)
+  })
+}
+
+function createGameLoop ({ state, snake }) {
+  const loopDebug = debug.extend('loop')
+  const canvas = createCanvas({ state })
+  const collisionDetector = createCollisionDetector({ state })
+  const handlers = {
+    onSnakeCollision: () => {},
+    onSnakeEatApple: () => {}
   }
 
-  prepareGame()
-
-  function prepareGame () {
-    state.resetState()
-    userInterface.setScore(state.getScore())
-    userInterface.setHighscore(state.getHighscore())
-    userInterface.hideGameover()
-    userInterface.hideCongratulations()
-    userInterface.hidePlayingField()
+  function startGameInterval () {
+    state.setGameInterval(setInterval(clock, state.getSpeed()))
+    canvas.startRendering()
   }
 
-  function startGame () {
-    debug('Starting game')
-    addRandomApple()
-    startGameInterval()
-    area.startRendering()
-  }
-
-  function endGame () {
-    stopGame()
-    setGameResults()
-    userInterface.showGameover()
-    snake.resetDirection()
-    clearTimeout(startAddRandomAppleTimeout)
-  }
-
-  function setGameResults () {
-    const score = state.getScore()
-    const highscore = state.getHighscore()
-    userInterface.setYourScore(score)
-
-    if (score > highscore) {
-      state.setHighscore(score)
-      userInterface.showCongratulations()
-    }
-  }
-
-  function eatApple (eatenApple) {
-    state.removeApple(eatenApple)
-    state.addSnakePart()
-    state.addScorePoint()
-    debug('➕ Point added. New score: ', state.getScore())
-
-    userInterface.setScore(state.getScore())
-    stopGameInterval()
-    startGameInterval()
-  }
-
-  function addRandomApple () {
-    state.addApple({
-      x: getRandomInt(0, areaSquareWidth - 1),
-      y: getRandomInt(0, areaSquareWidth - 1)
-    })
+  function stopGameInterval () {
+    clearInterval(state.getGameInterval())
+    canvas.stopRendering()
   }
 
   function clock () {
+    // Uncomment only to see how clock works
+    // loopDebug('Tick. Checking what changed...')
     state.setSnake(snake.getNewPosition(state.getSnake()))
     const appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple()
 
@@ -151,70 +202,21 @@ function createSnakeGame () {
       collisionDetector.headTouchingBoundaries() ||
       collisionDetector.snakeEatHimself()
     ) {
-      endGame()
+      loopDebug('Snake collision 💥')
+      handlers.onSnakeCollision()
     }
 
     if (appleOnSnakeHead) {
-      eatApple(appleOnSnakeHead)
-      addRandomApple()
+      loopDebug('Snake eat the apple 🍎')
+      handlers.onSnakeEatApple(appleOnSnakeHead)
     }
   }
 
-  function startGameInterval () {
-    gameInterval = setInterval(
-      clock,
-      calculateSpeedBasedOnScore(state.getScore())
-    )
-  }
-
-  function stopGameInterval () {
-    clearInterval(gameInterval)
-  }
-
-  function stopGame () {
-    debug('🏁 Game over. Your result', state.getScore())
-    stopGameInterval()
-    area.stopRendering()
-  }
-
-  function calculateSpeedBasedOnScore (score) {
-    const minSpeed = 50
-    const maxSpeed = 80
-    const step = 25
-    const speed = minSpeed - score * 25
-    const newSpeed = speed < maxSpeed ? maxSpeed : speed
-    console.groupEnd('Snake with speed ', speed)
-    console.group('Snake with speed ', newSpeed)
-    return newSpeed
-  }
-
-  return {}
-}
-
-function createUserInterface () {
-  const playingFieldElement = createElement('playing-field')
-  const startElement = createElement('start')
-  const restartElement = createElement('restart')
-  const scoreElement = createElement('score')
-  const highscoreElement = createElement('highscore')
-  const yourScoreElement = createElement('your-score')
-  const congratulationsElement = createElement('congratulations')
-  const gameoverElement = createElement('gameover')
-
   return {
-    showPlayingField: () => playingFieldElement.show(),
-    hidePlayingField: () => playingFieldElement.hide(),
-    showStart: () => startElement.show(),
-    hideStart: () => startElement.hide(),
-    showCongratulations: () => congratulationsElement.show(),
-    hideCongratulations: () => congratulationsElement.hide(),
-    showGameover: () => gameoverElement.show(),
-    hideGameover: () => gameoverElement.hide(),
-    setScore: value => scoreElement.setValue(value),
-    setHighscore: value => highscoreElement.setValue(value),
-    setYourScore: value => yourScoreElement.setValue(value),
-    onStartClick: handler => startElement.on('click', handler),
-    onRestartClick: handler => restartElement.on('click', handler)
+    start: startGameInterval,
+    stop: stopGameInterval,
+    onSnakeCollision: handler => (handlers.onSnakeCollision = handler),
+    onSnakeEatApple: handler => (handlers.onSnakeEatApple = handler)
   }
 }
 
@@ -262,8 +264,108 @@ function createCollisionDetector ({ state }) {
   }
 }
 
-function createArea ({ state }) {
-  debug('Creating Area')
+function createGameBehaviors ({ state, userInterface, gameLoop, snake }) {
+  const maxSpeed = 40
+  const speedStep = 2
+
+  function prepareGame () {
+    state.resetState()
+    userInterface.setScore(state.getScore())
+    userInterface.setHighscore(state.getHighscore())
+    userInterface.hideGameover()
+    userInterface.hideCongratulations()
+    userInterface.hidePlayingField()
+  }
+
+  function startGame () {
+    debug('Starting game')
+    addRandomApple()
+    gameLoop.start()
+  }
+
+  function stopGame () {
+    const score = state.getScore()
+    const highscore = state.getHighscore()
+
+    gameLoop.stop()
+    snake.resetDirection()
+    userInterface.setYourScore(score)
+
+    if (score > highscore) {
+      state.setHighscore(score)
+      userInterface.showCongratulations()
+    }
+
+    userInterface.showGameover()
+    debug('🏁 Game over. Your result', score)
+  }
+
+  function eatApple (eatenApple) {
+    state.removeApple(eatenApple)
+    state.addSnakePart()
+    state.addScorePoint()
+    state.setSpeed(calculateSpeedBasedOnScore(state.getScore()))
+
+    userInterface.setScore(state.getScore())
+    gameLoop.stop()
+    gameLoop.start()
+    addRandomApple()
+
+    debug('➕ Point added. New score: ', state.getScore())
+  }
+
+  function addRandomApple () {
+    state.addApple({
+      x: getRandomInt(0, areaSquareWidth - 1),
+      y: getRandomInt(0, areaSquareWidth - 1)
+    })
+  }
+
+  function calculateSpeedBasedOnScore (score) {
+    const speed = state.getSpeed() - score * speedStep
+    const newSpeed = speed < maxSpeed ? maxSpeed : speed
+    console.groupEnd('Snake with speed ', speed)
+    console.group('Snake with speed ', newSpeed)
+    return newSpeed
+  }
+
+  return {
+    prepareGame,
+    startGame,
+    stopGame,
+    eatApple
+  }
+}
+
+function createUserInterface () {
+  const playingFieldElement = createElement('playing-field')
+  const startElement = createElement('start')
+  const restartElement = createElement('restart')
+  const scoreElement = createElement('score')
+  const highscoreElement = createElement('highscore')
+  const yourScoreElement = createElement('your-score')
+  const congratulationsElement = createElement('congratulations')
+  const gameoverElement = createElement('gameover')
+
+  return {
+    showPlayingField: () => playingFieldElement.show(),
+    hidePlayingField: () => playingFieldElement.hide(),
+    showStart: () => startElement.show(),
+    hideStart: () => startElement.hide(),
+    showCongratulations: () => congratulationsElement.show(),
+    hideCongratulations: () => congratulationsElement.hide(),
+    showGameover: () => gameoverElement.show(),
+    hideGameover: () => gameoverElement.hide(),
+    setScore: value => scoreElement.setValue(value),
+    setHighscore: value => highscoreElement.setValue(value),
+    setYourScore: value => yourScoreElement.setValue(value),
+    onStartClick: handler => startElement.on('click', handler),
+    onRestartClick: handler => restartElement.on('click', handler)
+  }
+}
+
+function createCanvas ({ state }) {
+  const canvasDebug = debug.extend('canvas')
   const canvasElement = createElement('playing-field')
   const canvas = canvasElement.getElement()
   const ctx = canvas.getContext('2d')
@@ -302,7 +404,10 @@ function createArea ({ state }) {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
   }
 
-  function draw (timestamp) {
+  function draw (timestampDiff) {
+    // ⚠️ Be careful. Your browser might hang out
+    // Uncomment only to see how render loop works
+    canvasDebug(timestampDiff)
     clearCanvas()
     drawSnake(state.getSnake())
     drawApples(state.getApples())
@@ -318,71 +423,13 @@ function createArea ({ state }) {
   }
 
   return {
-    drawSnake,
     startRendering,
     stopRendering
   }
 }
 
-const game = createSnakeGame()
-
-function getRandomInt (start, end) {
-  const random = Math.round(Math.random() * end + start)
-  return random
-}
-
-function createSnake ({ startDirection }) {
-  const oppositeDirections = {
-    left: 'right',
-    up: 'down',
-    right: 'left',
-    down: 'up'
-  }
-  let direction = startDirection
-
-  function getNewPosition (currentSnake) {
-    const newSnake = cloneDeep(currentSnake)
-
-    if (direction === 'up') {
-      newSnake[0].y -= 1
-    }
-
-    if (direction === 'right') {
-      newSnake[0].x += 1
-    }
-
-    if (direction === 'down') {
-      newSnake[0].y += 1
-    }
-
-    if (direction === 'left') {
-      newSnake[0].x -= 1
-    }
-
-    for (let i = 1; i < currentSnake.length; i++) {
-      newSnake[i] = currentSnake[i - 1]
-    }
-    return newSnake
-  }
-
-  function changeDirection (newDirection) {
-    if (oppositeDirections[direction] !== newDirection) {
-      direction = newDirection
-    }
-  }
-
-  function resetDirection () {
-    direction = startDirection
-  }
-
-  return {
-    getNewPosition,
-    changeDirection,
-    resetDirection
-  }
-}
-
 function createKeyboardController () {
+  const controllerDebug = debug.extend('keyboard')
   const keyCodesToNamesMap = {
     37: 'left',
     38: 'up',
@@ -402,6 +449,7 @@ function createKeyboardController () {
 
   document.onkeydown = function (e) {
     const keyName = keyCodesToNamesMap[e.keyCode]
+    controllerDebug(`Pressed ${keyName}`)
 
     if (keyName) {
       handlers[keyName].forEach(handler => handler(e))
@@ -445,6 +493,11 @@ function createElement (name) {
     setValue,
     getElement
   }
+}
+
+function getRandomInt (start, end) {
+  const random = Math.round(Math.random() * end + start)
+  return random
 }
 
 function showIntroInConsole () {

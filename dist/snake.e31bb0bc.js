@@ -3799,8 +3799,37 @@ var debug = (0, _debug.default)('snake');
 localStorage.debug = '*';
 var squareWidth = 14;
 var areaSquareWidth = Math.floor(window.innerHeight / 20);
+createSnakeGame();
+
+function createSnakeGame() {
+  showIntroInConsole();
+  debug('🚀 Creating Snake Game');
+  var state = createState();
+  var snake = createSnake({
+    startDirection: 'right'
+  });
+  var gameLoop = createGameLoop({
+    state: state,
+    snake: snake
+  });
+  var userInterface = createUserInterface();
+  var gameBehaviors = createGameBehaviors({
+    state: state,
+    snake: snake,
+    gameLoop: gameLoop,
+    userInterface: userInterface
+  });
+  var gameInteractions = createGameInteractions({
+    snake: snake,
+    gameLoop: gameLoop,
+    userInterface: userInterface,
+    gameBehaviors: gameBehaviors
+  });
+  gameBehaviors.prepareGame();
+}
 
 function createState() {
+  var stateDebug = debug.extend('state');
   var defaultState = {
     score: 0,
     snake: [{
@@ -3816,9 +3845,13 @@ function createState() {
       x: 0,
       y: 7
     }],
-    apples: []
+    apples: [],
+    speed: 220,
+    gameInterval: 0
   };
   var state = (0, _cloneDeep.default)(defaultState);
+  stateDebug("State initialized \uD83D\uDDC2");
+  console.log(state);
   return {
     addScorePoint: function addScorePoint() {
       return state.score++;
@@ -3857,28 +3890,85 @@ function createState() {
       return state.apples = state.apples.filter(function (apple) {
         return apple.x !== removingApple.x && apple.y !== removingApple.y;
       });
+    },
+    getSpeed: function getSpeed() {
+      return state.speed;
+    },
+    setSpeed: function setSpeed(value) {
+      return state.speed = value;
+    },
+    getGameInterval: function getGameInterval() {
+      return state.gameInterval;
+    },
+    setGameInterval: function setGameInterval(value) {
+      return state.gameInterval = value;
     }
   };
 }
 
-function createSnakeGame() {
-  showIntroInConsole();
-  debug('Creating Snake Game');
-  var state = createState();
-  var area = createArea({
-    state: state
-  });
-  var userInterface = createUserInterface();
-  var collisionDetector = createCollisionDetector({
-    state: state
-  });
+function createSnake(_ref) {
+  var startDirection = _ref.startDirection;
+  var snakeDebug = debug.extend('🐍');
+  var oppositeDirections = {
+    left: 'right',
+    up: 'down',
+    right: 'left',
+    down: 'up'
+  };
+  var direction = startDirection;
+
+  function getNewPosition(currentSnake) {
+    var newSnake = (0, _cloneDeep.default)(currentSnake);
+
+    if (direction === 'up') {
+      newSnake[0].y -= 1;
+    }
+
+    if (direction === 'right') {
+      newSnake[0].x += 1;
+    }
+
+    if (direction === 'down') {
+      newSnake[0].y += 1;
+    }
+
+    if (direction === 'left') {
+      newSnake[0].x -= 1;
+    }
+
+    for (var i = 1; i < currentSnake.length; i++) {
+      newSnake[i] = currentSnake[i - 1];
+    }
+
+    return newSnake;
+  }
+
+  function changeDirection(newDirection) {
+    if (oppositeDirections[direction] !== newDirection) {
+      direction = newDirection;
+      snakeDebug("New direction ".concat(direction));
+    }
+  }
+
+  function resetDirection() {
+    direction = startDirection;
+  }
+
+  return {
+    getNewPosition: getNewPosition,
+    changeDirection: changeDirection,
+    resetDirection: resetDirection
+  };
+}
+
+function createGameInteractions(_ref2) {
+  var userInterface = _ref2.userInterface,
+      snake = _ref2.snake,
+      gameBehaviors = _ref2.gameBehaviors,
+      gameLoop = _ref2.gameLoop;
   var keyboard = createKeyboardController();
-  var snake = createSnake({
-    startDirection: 'right'
-  });
-  var gameInterval;
-  var randomAppleTimeout;
-  ['left', 'right', 'up', 'down'].forEach(function (direction) {
+  var snakeMoveDirections = ['left', 'right', 'up', 'down'];
+  snakeMoveDirections.forEach(function (direction) {
     return keyboard.onClick(direction, function () {
       return snake.changeDirection(direction);
     });
@@ -3886,23 +3976,118 @@ function createSnakeGame() {
   userInterface.onStartClick(function () {
     userInterface.hideStart();
     userInterface.showPlayingField();
-    setTimeout(startGame, 500);
-    randomAppleTimeout = startAddRandomAppleTimeout();
+    setTimeout(gameBehaviors.startGame, 500);
   });
   userInterface.onRestartClick(function () {
-    prepareGame();
+    gameBehaviors.prepareGame();
     userInterface.showPlayingField();
-    setTimeout(startGame, 500);
+    setTimeout(gameBehaviors.startGame, 500);
   });
+  gameLoop.onSnakeCollision(function () {
+    gameBehaviors.stopGame();
+  });
+  gameLoop.onSnakeEatApple(function (apple) {
+    gameBehaviors.eatApple(apple);
+  });
+}
 
-  function startAddRandomAppleTimeout() {
-    setTimeout(function () {
-      addRandomApple();
-      randomAppleTimeout = startAddRandomAppleTimeout();
-    }, getRandomInt(16000, 40000));
+function createGameLoop(_ref3) {
+  var state = _ref3.state,
+      snake = _ref3.snake;
+  var loopDebug = debug.extend('loop');
+  var canvas = createCanvas({
+    state: state
+  });
+  var collisionDetector = createCollisionDetector({
+    state: state
+  });
+  var handlers = {
+    onSnakeCollision: function onSnakeCollision() {},
+    onSnakeEatApple: function onSnakeEatApple() {}
+  };
+
+  function startGameInterval() {
+    state.setGameInterval(setInterval(clock, state.getSpeed()));
+    canvas.startRendering();
   }
 
-  prepareGame();
+  function stopGameInterval() {
+    clearInterval(state.getGameInterval());
+    canvas.stopRendering();
+  }
+
+  function clock() {
+    // Uncomment only to see how clock works
+    // loopDebug('Tick. Checking what changed...')
+    state.setSnake(snake.getNewPosition(state.getSnake()));
+    var appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple();
+
+    if (collisionDetector.headTouchingBoundaries() || collisionDetector.snakeEatHimself()) {
+      loopDebug('Snake collision 💥');
+      handlers.onSnakeCollision();
+    }
+
+    if (appleOnSnakeHead) {
+      loopDebug('Snake eat the apple 🍎');
+      handlers.onSnakeEatApple(appleOnSnakeHead);
+    }
+  }
+
+  return {
+    start: startGameInterval,
+    stop: stopGameInterval,
+    onSnakeCollision: function onSnakeCollision(handler) {
+      return handlers.onSnakeCollision = handler;
+    },
+    onSnakeEatApple: function onSnakeEatApple(handler) {
+      return handlers.onSnakeEatApple = handler;
+    }
+  };
+}
+
+function createCollisionDetector(_ref4) {
+  var state = _ref4.state;
+
+  function snakeEatHimself() {
+    var head = state.getSnakeHead();
+    var result = false;
+    state.getSnake().slice(1).some(function (part) {
+      return result = part.x === head.x && part.y === head.y;
+    });
+    return result;
+  }
+
+  function headTouchingBoundaries() {
+    var head = state.getSnakeHead();
+    return head.x < 0 || head.x >= areaSquareWidth || head.y < 0 || head.y >= areaSquareWidth;
+  }
+
+  function snakeHeadTouchingAnyApple() {
+    var head = state.getSnakeHead();
+    var foundApple;
+    state.getApples().some(function (apple) {
+      if (apple.x === head.x && apple.y === head.y) {
+        foundApple = apple;
+        return true;
+      }
+    });
+    return foundApple;
+  }
+
+  return {
+    snakeEatHimself: snakeEatHimself,
+    headTouchingBoundaries: headTouchingBoundaries,
+    snakeHeadTouchingAnyApple: snakeHeadTouchingAnyApple
+  };
+}
+
+function createGameBehaviors(_ref5) {
+  var state = _ref5.state,
+      userInterface = _ref5.userInterface,
+      gameLoop = _ref5.gameLoop,
+      snake = _ref5.snake;
+  var maxSpeed = 40;
+  var speedStep = 2;
 
   function prepareGame() {
     state.resetState();
@@ -3916,37 +4101,35 @@ function createSnakeGame() {
   function startGame() {
     debug('Starting game');
     addRandomApple();
-    startGameInterval();
-    area.startRendering();
+    gameLoop.start();
   }
 
-  function endGame() {
-    stopGame();
-    setGameResults();
-    userInterface.showGameover();
-    snake.resetDirection();
-    clearTimeout(startAddRandomAppleTimeout);
-  }
-
-  function setGameResults() {
+  function stopGame() {
     var score = state.getScore();
     var highscore = state.getHighscore();
+    gameLoop.stop();
+    snake.resetDirection();
     userInterface.setYourScore(score);
 
     if (score > highscore) {
       state.setHighscore(score);
       userInterface.showCongratulations();
     }
+
+    userInterface.showGameover();
+    debug('🏁 Game over. Your result', score);
   }
 
   function eatApple(eatenApple) {
     state.removeApple(eatenApple);
     state.addSnakePart();
     state.addScorePoint();
-    debug('➕ Point added. New score: ', state.getScore());
+    state.setSpeed(calculateSpeedBasedOnScore(state.getScore()));
     userInterface.setScore(state.getScore());
-    stopGameInterval();
-    startGameInterval();
+    gameLoop.stop();
+    gameLoop.start();
+    addRandomApple();
+    debug('➕ Point added. New score: ', state.getScore());
   }
 
   function addRandomApple() {
@@ -3956,46 +4139,20 @@ function createSnakeGame() {
     });
   }
 
-  function clock() {
-    state.setSnake(snake.getNewPosition(state.getSnake()));
-    var appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple();
-
-    if (collisionDetector.headTouchingBoundaries() || collisionDetector.snakeEatHimself()) {
-      endGame();
-    }
-
-    if (appleOnSnakeHead) {
-      eatApple(appleOnSnakeHead);
-      addRandomApple();
-    }
-  }
-
-  function startGameInterval() {
-    gameInterval = setInterval(clock, calculateSpeedBasedOnScore(state.getScore()));
-  }
-
-  function stopGameInterval() {
-    clearInterval(gameInterval);
-  }
-
-  function stopGame() {
-    debug('🏁 Game over. Your result', state.getScore());
-    stopGameInterval();
-    area.stopRendering();
-  }
-
   function calculateSpeedBasedOnScore(score) {
-    var minSpeed = 50;
-    var maxSpeed = 80;
-    var step = 25;
-    var speed = minSpeed - score * 25;
+    var speed = state.getSpeed() - score * speedStep;
     var newSpeed = speed < maxSpeed ? maxSpeed : speed;
     console.groupEnd('Snake with speed ', speed);
     console.group('Snake with speed ', newSpeed);
     return newSpeed;
   }
 
-  return {};
+  return {
+    prepareGame: prepareGame,
+    startGame: startGame,
+    stopGame: stopGame,
+    eatApple: eatApple
+  };
 }
 
 function createUserInterface() {
@@ -4050,45 +4207,9 @@ function createUserInterface() {
   };
 }
 
-function createCollisionDetector(_ref) {
-  var state = _ref.state;
-
-  function snakeEatHimself() {
-    var head = state.getSnakeHead();
-    var result = false;
-    state.getSnake().slice(1).some(function (part) {
-      return result = part.x === head.x && part.y === head.y;
-    });
-    return result;
-  }
-
-  function headTouchingBoundaries() {
-    var head = state.getSnakeHead();
-    return head.x < 0 || head.x >= areaSquareWidth || head.y < 0 || head.y >= areaSquareWidth;
-  }
-
-  function snakeHeadTouchingAnyApple() {
-    var head = state.getSnakeHead();
-    var foundApple;
-    state.getApples().some(function (apple) {
-      if (apple.x === head.x && apple.y === head.y) {
-        foundApple = apple;
-        return true;
-      }
-    });
-    return foundApple;
-  }
-
-  return {
-    snakeEatHimself: snakeEatHimself,
-    headTouchingBoundaries: headTouchingBoundaries,
-    snakeHeadTouchingAnyApple: snakeHeadTouchingAnyApple
-  };
-}
-
-function createArea(_ref2) {
-  var state = _ref2.state;
-  debug('Creating Area');
+function createCanvas(_ref6) {
+  var state = _ref6.state;
+  var canvasDebug = debug.extend('canvas');
   var canvasElement = createElement('playing-field');
   var canvas = canvasElement.getElement();
   var ctx = canvas.getContext('2d');
@@ -4118,7 +4239,10 @@ function createArea(_ref2) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function draw(timestamp) {
+  function draw(timestampDiff) {
+    // ⚠️ Be careful. Your browser might hang out
+    // Uncomment only to see how render loop works
+    canvasDebug(timestampDiff);
     clearCanvas();
     drawSnake(state.getSnake());
     drawApples(state.getApples());
@@ -4134,73 +4258,13 @@ function createArea(_ref2) {
   }
 
   return {
-    drawSnake: drawSnake,
     startRendering: startRendering,
     stopRendering: stopRendering
   };
 }
 
-var game = createSnakeGame();
-
-function getRandomInt(start, end) {
-  var random = Math.round(Math.random() * end + start);
-  return random;
-}
-
-function createSnake(_ref3) {
-  var startDirection = _ref3.startDirection;
-  var oppositeDirections = {
-    left: 'right',
-    up: 'down',
-    right: 'left',
-    down: 'up'
-  };
-  var direction = startDirection;
-
-  function getNewPosition(currentSnake) {
-    var newSnake = (0, _cloneDeep.default)(currentSnake);
-
-    if (direction === 'up') {
-      newSnake[0].y -= 1;
-    }
-
-    if (direction === 'right') {
-      newSnake[0].x += 1;
-    }
-
-    if (direction === 'down') {
-      newSnake[0].y += 1;
-    }
-
-    if (direction === 'left') {
-      newSnake[0].x -= 1;
-    }
-
-    for (var i = 1; i < currentSnake.length; i++) {
-      newSnake[i] = currentSnake[i - 1];
-    }
-
-    return newSnake;
-  }
-
-  function changeDirection(newDirection) {
-    if (oppositeDirections[direction] !== newDirection) {
-      direction = newDirection;
-    }
-  }
-
-  function resetDirection() {
-    direction = startDirection;
-  }
-
-  return {
-    getNewPosition: getNewPosition,
-    changeDirection: changeDirection,
-    resetDirection: resetDirection
-  };
-}
-
 function createKeyboardController() {
+  var controllerDebug = debug.extend('keyboard');
   var keyCodesToNamesMap = {
     37: 'left',
     38: 'up',
@@ -4220,6 +4284,7 @@ function createKeyboardController() {
 
   document.onkeydown = function (e) {
     var keyName = keyCodesToNamesMap[e.keyCode];
+    controllerDebug("Pressed ".concat(keyName));
 
     if (keyName) {
       handlers[keyName].forEach(function (handler) {
@@ -4265,6 +4330,11 @@ function createElement(name) {
     setValue: setValue,
     getElement: getElement
   };
+}
+
+function getRandomInt(start, end) {
+  var random = Math.round(Math.random() * end + start);
+  return random;
 }
 
 function showIntroInConsole() {

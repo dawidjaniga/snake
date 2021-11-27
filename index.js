@@ -3,15 +3,20 @@ import createDebug from 'debug'
 const debug = createDebug('snake')
 localStorage.debug = '*'
 
-const squareWidth = 14
+const squareWidth = 10
 const areaSquareWidth = Math.floor(window.innerHeight / 20)
 
+// Clean Code
+// Top to Bottom
+// Factory -  Dlaczego fabryka? Czy byly inne wzorce?
+// Protected API
 createSnakeGame()
 
 function createSnakeGame () {
   showIntroInConsole()
   debug('🚀 Creating Snake Game')
 
+  // Divide and Conquer
   const state = createState()
   const snake = createSnake({ startDirection: 'right' })
   const gameLoop = createGameLoop({ state, snake })
@@ -63,6 +68,8 @@ function createState () {
   stateDebug(`State initialized 🗂`)
   console.log(state)
 
+  // Module-Reveal Pattern
+  // AddyOsmani Ksiązka JS Pattern
   return {
     addScorePoint: () => state.score++,
     getScore: () => state.score,
@@ -145,7 +152,8 @@ function createGameInteractions ({
   gameBehaviors,
   gameLoop
 }) {
-  const keyboard = createKeyboardController()
+  const keyboard = createAkaiMpd18Controller()
+  // const keyboard = createKeyboardController()
   const snakeMoveDirections = ['left', 'right', 'up', 'down']
 
   snakeMoveDirections.forEach(direction =>
@@ -194,16 +202,18 @@ function createGameLoop ({ state, snake }) {
 
   function clock () {
     // Uncomment only to see how clock works
-    // loopDebug('Tick. Checking what changed...')
+    loopDebug('Tick. Checking what changed...')
     state.setSnake(snake.getNewPosition(state.getSnake()))
     const appleOnSnakeHead = collisionDetector.snakeHeadTouchingAnyApple()
 
-    if (
-      collisionDetector.headTouchingBoundaries() ||
-      collisionDetector.snakeEatHimself()
-    ) {
+    if (collisionDetector.snakeEatHimself()) {
       loopDebug('Snake collision 💥')
       handlers.onSnakeCollision()
+    }
+
+    if (collisionDetector.headTouchingBoundaries()) {
+      loopDebug('Snake went outside the field 🚪')
+      // handlers.onSnakeCollision()
     }
 
     if (appleOnSnakeHead) {
@@ -407,7 +417,7 @@ function createCanvas ({ state }) {
   function draw (timestampDiff) {
     // ⚠️ Be careful. Your browser might hang out
     // Uncomment only to see how render loop works
-    canvasDebug(timestampDiff)
+    // canvasDebug(timestampDiff)
     clearCanvas()
     drawSnake(state.getSnake())
     drawApples(state.getApples())
@@ -430,7 +440,7 @@ function createCanvas ({ state }) {
 
 function createKeyboardController () {
   const controllerDebug = debug.extend('keyboard')
-  const keyCodesToNamesMap = {
+  const keyCodeToNameMap = {
     37: 'left',
     38: 'up',
     39: 'right',
@@ -443,17 +453,54 @@ function createKeyboardController () {
     down: []
   }
 
-  function getKeyNameByCode (code) {
-    return mapKeys[code]
-  }
-
   document.onkeydown = function (e) {
-    const keyName = keyCodesToNamesMap[e.keyCode]
+    const keyName = keyCodeToNameMap[e.keyCode]
     controllerDebug(`Pressed ${keyName}`)
 
     if (keyName) {
       handlers[keyName].forEach(handler => handler(e))
     }
+  }
+
+  return {
+    onClick: (key, handler) => {
+      handlers[key].push(handler)
+    }
+  }
+}
+
+function createAkaiMpd18Controller () {
+  const controllerDebug = debug.extend('AKAI-MPD18')
+
+  const buttonIdToNameMap = {
+    13756: 'left',
+    13761: 'up',
+    13758: 'right',
+    13753: 'down'
+  }
+  const handlers = {
+    left: [],
+    up: [],
+    right: [],
+    down: []
+  }
+
+  WebMidi.enable()
+    .then(onEnabled)
+    .catch(err => controllerDebug(err))
+
+  function onEnabled () {
+    const controller = WebMidi.getInputByName('Akai MPD18')
+
+    controller.addListener('midimessage', event => {
+      const buttonId = String(event.data[0]) + String(event.data[1])
+      const keyName = buttonIdToNameMap[buttonId]
+
+      if (keyName) {
+        controllerDebug(`Pressed ${keyName}`)
+        handlers[keyName].forEach(handler => handler())
+      }
+    })
   }
 
   return {
